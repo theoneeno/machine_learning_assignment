@@ -1,0 +1,121 @@
+---
+title: "Practical machine learning assignment"
+author: "Zhouyi Wu"
+date: "Thursday, March 10, 2016"
+output: html_document
+---
+#Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ¨C a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we use data from accelerometers to build a model to predict the pattern of activity. In this project, there are 5 acitivities named A, B, C, D and E. After build the model, we will aslo predict the given 20 observations.
+
+#Prepare the data
+load packages and set seed
+```{r, warning=FALSE}
+library(caret)
+library(rattle)
+set.seed(12345)
+```
+
+download the data from url
+```{r,eval=FALSE}
+fileurl<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileurl,destfile="./data/pml-training.csv")
+fileurl<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileurl,destfile="./data/pml-testing.csv")
+##in this chunk option eval=FALSE because the data has been previously downloaded
+```
+
+read the data and remove variables with too much NA
+```{r}
+trainingdata = read.csv("./data/pml-training.csv", na.strings=c("", "NA"))
+testingdata = read.csv("./data/pml-testing.csv", na.strings=c("", "NA"))
+trainingdata_no_NA <- trainingdata[ , colSums(is.na(trainingdata)) == 0]
+testingdata_no_NA<-testingdata[,colSums(is.na(testingdata)) == 0]
+```
+
+select variables related to belt, arm and dumbell
+```{r}
+filter = grepl("belt|arm|dumbell", names(trainingdata_no_NA))
+train<-trainingdata_no_NA[,filter]
+test<-testingdata_no_NA[,filter]
+```
+
+check if there are variables have low variance
+```{r}
+sum(nearZeroVar(train))
+```
+
+plot to check if there are variables are highly related and remove these variables
+```{r}
+levelplot(cor(train))
+remove = findCorrelation(cor(train), cutoff = .90, verbose = TRUE)
+train1<-train[,-remove]
+test1<-test[,-remove]
+```
+
+bind the output (classe) back to the dataset
+```{r}
+train2<-cbind(train1,classe=trainingdata$classe)
+```
+
+split the data into training set and testingset
+```{r}
+inTrain <- createDataPartition(y=train2$classe, p=0.7, list=FALSE)
+trainM<-train2[inTrain,]
+testM<-train2[-inTrain,]
+dim(trainM);dim(testM)
+```
+
+#Analysis: Model 1
+the first model is use rpart to build a single tree.
+train the model and plot the tree
+```{r}
+model<-train(classe~.,method="rpart",data=trainM)
+fancyRpartPlot(model$finalModel)
+```
+
+use the testing data to cross validate.
+calculate the confusionMatrix.
+```{r}
+confusionMatrix(predict(model,testM), testM$classe)
+```
+
+the accuracy is only 0.462, the out of sample error so large large that we may not use this model
+
+#Analysis: Model 2
+the second model is a random forest model
+train the model:
+```{r}
+model2<-train(classe~.,method="rf",data=trainM)
+```
+
+use the testing data to cross validate.
+calculate the confusionMatrix.
+
+```{r}
+confusionMatrix(predict(model2,testM), testM$classe)
+```
+the accuracy is 0.989. It is an acceptable out of sample error rate. We may use this model.
+
+Plot the final model to check the error curve
+```{r}
+plot(model2$finalModel)
+```
+
+claculate and plot which variable has higher influence on the result
+```{r}
+plot(varImp(model2, scale = FALSE))
+```
+
+
+#Conclusion
+compare the two models and we select the random forest model because of its good performance in cross validation.
+
+Finaly we use this model to predict the 20 test observations, and these answers will be uploaded as final prediction.
+```{r}
+answers <- predict(model2, test)
+
+answers
+
+```
+
+
